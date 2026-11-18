@@ -1,0 +1,394 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Bricolage Grotesque", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-bone: #f2f0e6;
+  --color-bone-deep: #e9e6d9;
+  --color-paper: #fbfaf4;
+  --color-paper-warm: #f7f5ec;
+  --color-ink: #172019;
+  --color-ink-soft: #2c372e;
+  --color-muted: #70786c;
+  --color-muted-light: #969d90;
+  --color-line: #dddccf;
+  --color-line-strong: #c9c8ba;
+
+  --color-lime: #c9f95f;
+  --color-lime-soft: #edfad0;
+  --color-lime-deep: #76972e;
+  --color-coral: #ef8868;
+  --color-coral-soft: #fbe6de;
+  --color-sky: #9dc7e5;
+  --color-sky-soft: #e2eef7;
+  --color-violet: #c7b8ea;
+  --color-violet-soft: #eee8f8;
+  --color-sage: #dfe7d2;
+  --color-sage-deep: #647a4d;
+  --color-sand: #e9dfc9;
+
+  --shadow-soft: 0 1px 2px rgba(23, 32, 25, 0.04), 0 8px 24px -12px rgba(23, 32, 25, 0.12);
+  --shadow-float: 0 24px 70px -24px rgba(23, 32, 25, 0.32), 0 3px 10px rgba(23, 32, 25, 0.06);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background: var(--color-bone);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #d3d2c4;
+    border: 3px solid var(--color-bone);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #b9b8a9;
+  }
+}
+
+@keyframes sim-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sim-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sim-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes sim-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes sim-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes sim-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes sim-dash {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes sim-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-fade-up {
+  animation: sim-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade {
+  animation: sim-fade 0.3s ease both;
+}
+
+.animate-pop {
+  animation: sim-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-float {
+  animation: sim-float 4.5s ease-in-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: sim-pulse 2s ease-in-out infinite;
+}
+
+.live-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  animation: sim-ring 2.6s ease-out infinite;
+}
+
+.grid-dots {
+  background-image: radial-gradient(rgba(23, 32, 25, 0.16) 0.7px, transparent 0.7px);
+  background-size: 16px 16px;
+}
+
+.grid-lines {
+  background-image:
+    linear-gradient(to right, rgba(23, 32, 25, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 32, 25, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.blueprint {
+  background-color: #f6f4ec;
+  background-image:
+    linear-gradient(to right, rgba(23, 32, 25, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 32, 25, 0.07) 1px, transparent 1px),
+    linear-gradient(to right, rgba(23, 32, 25, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 32, 25, 0.035) 1px, transparent 1px);
+  background-size:
+    80px 80px,
+    80px 80px,
+    16px 16px,
+    16px 16px;
+}
+
+.osm-tile {
+  filter: saturate(0.72) contrast(0.94) brightness(1.035) sepia(0.07);
+  user-select: none;
+}
+
+.osm-canvas {
+  background-color: #e8e6da;
+  background-image: url("/images/map-texture.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.osm-tint {
+  background:
+    radial-gradient(90% 80% at 50% 45%, transparent 48%, rgba(23, 32, 25, 0.09) 100%),
+    linear-gradient(to bottom, rgba(242, 240, 230, 0.08), rgba(23, 32, 25, 0.04));
+}
+
+.map-grab {
+  cursor: grab;
+}
+
+.map-grab:active {
+  cursor: grabbing;
+}
+
+.map-shell:fullscreen {
+  height: 100svh !important;
+  width: 100vw;
+  border-radius: 0 !important;
+  border: 0;
+}
+
+.map-shell:fullscreen::backdrop {
+  background: #172019;
+}
+
+.scene-day {
+  background:
+    radial-gradient(80% 70% at 50% 20%, #fbfaef 0%, rgba(251, 250, 239, 0) 62%),
+    linear-gradient(155deg, #e7ecd8 0%, #eef0e0 44%, #e3e8d3 100%);
+}
+
+.scene-dusk {
+  background:
+    radial-gradient(75% 65% at 50% 16%, #f7d9b7 0%, rgba(247, 217, 183, 0) 58%),
+    linear-gradient(155deg, #d7cdb7 0%, #d9d4c4 45%, #c3c8b3 100%);
+}
+
+.scene-night {
+  background:
+    radial-gradient(80% 70% at 50% 20%, #3b4f47 0%, rgba(59, 79, 71, 0) 62%),
+    linear-gradient(155deg, #1b2a25 0%, #253630 50%, #19231f 100%);
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.paper-noise {
+  position: relative;
+}
+.paper-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  border-radius: inherit;
+}
+
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+}
+.range-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(
+    to right,
+    var(--color-ink) 0%,
+    var(--color-ink) var(--range-fill, 50%),
+    #e3e1d5 var(--range-fill, 50%),
+    #e3e1d5 100%
+  );
+}
+.range-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 99px;
+  background: #e3e1d5;
+}
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 16px;
+  width: 16px;
+  margin-top: -6px;
+  border-radius: 99px;
+  border: 3px solid var(--color-paper);
+  background: var(--color-ink);
+  box-shadow: 0 0 0 1px var(--color-ink);
+}
+.range-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 99px;
+  border: 3px solid var(--color-paper);
+  background: var(--color-ink);
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  z-index: 100;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
