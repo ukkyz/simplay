@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 export function databasePath() {
   // This is runtime data on a writable volume, not a deployable asset.
-  return resolve(/*turbopackIgnore: true*/ process.env.DATABASE_PATH || ".data/simplayz.sqlite");
+  return resolve(/*turbopackIgnore: true*/ process.env.SIMPLAY_DB_URL || ".data/simplayz.sqlite");
 }
 
 export function openDatabase(path: string) {
