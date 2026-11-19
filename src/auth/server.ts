@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { getDatabase } from "../db/client";
+import { DatabaseConfigError } from "../db/config";
 import { findSessionAccount, revokeSession, type Session } from "./repository";
 
 const SESSION_COOKIE = "simplayz_session";
@@ -13,7 +14,14 @@ export async function readSessionToken() {
 
 export const getAccount = cache(async () => {
   const token = await readSessionToken();
-  return token ? findSessionAccount(getDatabase(), token) : null;
+  if (!token) return null;
+  try {
+    return await findSessionAccount(getDatabase(), token);
+  } catch (error) {
+    if (error instanceof DatabaseConfigError) throw error;
+    // Server Components may log uncaught errors. Do not attach driver details.
+    throw new Error("Could not read the session from the database.");
+  }
 });
 
 export async function requireAccount() {

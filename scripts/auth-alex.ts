@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 import { AuthError, createAlexAccount } from "../src/auth/repository";
-import { databasePath, openDatabase } from "../src/db/client";
+import { openConfiguredDatabase } from "../src/db/client";
+import { databaseErrorMessage } from "../src/db/config";
 
 async function readPassword() {
   if (process.argv.length === 3 && process.argv[2] === "--stdin") {
@@ -32,7 +33,7 @@ async function readPassword() {
 nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 try {
   const password = await readPassword();
-  const { client, db } = openDatabase(databasePath());
+  const { client, db } = openConfiguredDatabase();
   try {
     await createAlexAccount(db, password);
     console.log("Created the alex owner login. The existing world was left unchanged.");
@@ -40,6 +41,7 @@ try {
     client.close();
   }
 } catch (error) {
-  console.error(error instanceof AuthError ? error.message : "Owner setup did not complete. Check the database and run npm run db:setup first.");
+  console.error(error instanceof AuthError ? error.message
+    : databaseErrorMessage(error, "Owner setup did not complete. Check the database and run npm run db:setup first."));
   process.exitCode = 1;
 }

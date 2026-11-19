@@ -2,6 +2,7 @@
 
 import { redirect, RedirectType } from "next/navigation";
 import { getDatabase } from "../db/client";
+import { databaseErrorMessage } from "../db/config";
 import { PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN, type AuthFormState } from "./credentials";
 import { allowAuthAttempt, AuthError, loginAccount, registerAccount } from "./repository";
 import { clearSession, readSessionToken, setSessionCookie } from "./server";
@@ -9,7 +10,7 @@ import { loginInput, registrationInput } from "./validation";
 
 function logUnavailability(error: unknown) {
   // Don't log credential inputs or SQL parameters.
-  console.error("SQLite account request failed", error instanceof Error ? error.name : "Unknown error");
+  console.error("Account request failed:", databaseErrorMessage(error, "Database operation failed."));
 }
 
 async function authenticate(mode: "login" | "register", form: FormData): Promise<AuthFormState> {
@@ -33,7 +34,7 @@ async function authenticate(mode: "login" | "register", form: FormData): Promise
   } catch (error) {
     if (error instanceof AuthError) return { username, error: error.message, field: error.status === 409 ? "username" : undefined };
     logUnavailability(error);
-    return { username, error: "Account access is temporarily unavailable. Try again shortly." };
+    return { username, error: databaseErrorMessage(error, "Account access is temporarily unavailable. Try again shortly.") };
   }
   redirect("/");
 }

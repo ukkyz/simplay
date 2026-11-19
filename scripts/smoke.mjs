@@ -61,7 +61,12 @@ before(async () => {
     throw new Error("Run npm run build before npm run smoke.", { cause });
   });
   databaseDir = await mkdtemp(join(tmpdir(), "simplayz-smoke-"));
-  env = { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", DATABASE_PATH: join(databaseDir, "world.sqlite") };
+  env = {
+    ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1",
+    // Explicit blanks also override Turso settings read by Next from .env files.
+    VERCEL: "0", SIMPLAY_DB_TURSO_DATABASE_URL: "", SIMPLAY_DB_TURSO_AUTH_TOKEN: "",
+    DATABASE_PATH: join(databaseDir, "world.sqlite"),
+  };
   await promisify(execFile)(process.execPath, ["--import", "tsx", "scripts/db.ts", "setup"], { env, timeout: 20_000 });
   const provision = spawnSync(process.execPath, ["--import", "tsx", "scripts/auth-alex.ts", "--stdin"], {
     input: `${alex.password}\n`, env, timeout: 20_000, encoding: "utf8",
@@ -369,4 +374,20 @@ test("the world endpoint rejects invalid, oversized, and cross-site edits from a
     assert.equal((await post({ ...json, "Sec-Fetch-Site": "cross-site" }, '{"type":"reset"}')).status(), 403);
     assert.deepEqual(await (await page.request.get(url)).json(), initial);
   });
+});
+
+test("Vercel runtime without Turso credentials cannot open the local fallback", async () => {
+  await stopServer();
+  const wouldBeLocalPath = join(databaseDir, "must-not-create", "world.sqlite");
+  env = { ...env, VERCEL: "1", DATABASE_PATH: wouldBeLocalPath };
+  await startServer();
+  const response = await fetch(`${baseURL}/api/world`, {
+    headers: { Cookie: `${sessionCookie}=${"a".repeat(43)}` },
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const { error } = await response.json();
+  assert.match(error, /SIMPLAY_DB_TURSO_DATABASE_URL/);
+  assert.match(error, /SIMPLAY_DB_TURSO_AUTH_TOKEN/);
+  await assert.rejects(access(join(databaseDir, "must-not-create")), { code: "ENOENT" });
 });
