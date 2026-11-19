@@ -43,15 +43,21 @@ export function SimplayzProvider({ children, initial }: { children: ReactNode; i
       request = new AbortController();
       try {
         const response = await fetch("/api/world", { signal: request.signal, cache: "no-store" });
-        if (response.ok) receive(await response.json() as PlayerSnapshot);
+        if (response.status === 401) window.location.replace("/login");
+        else if (response.ok) receive(await response.json() as PlayerSnapshot);
       } catch {
         // Keep the last acknowledged state when a background refresh fails.
       }
     };
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) void refresh();
+    };
     window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", restore);
     return () => {
       request?.abort();
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", restore);
     };
   }, [receive]);
 
@@ -82,6 +88,10 @@ export function SimplayzProvider({ children, initial }: { children: ReactNode; i
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(command),
       });
+      if (response.status === 401) {
+        window.location.replace("/login");
+        return null;
+      }
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null;
         notify("Changes not saved", body?.error ?? "Refresh the world and try again.", "coral");

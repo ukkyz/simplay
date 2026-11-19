@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { ArrowLeft, Compass } from "lucide-react";
+import { requireAccount } from "@/auth/server";
 
-export default function NotFound() {
+export default async function NotFound() {
+  await requireAccount();
   return (
-    <div className="mx-auto flex min-h-[76svh] max-w-2xl flex-col items-center justify-center px-5 py-16 text-center">
+    <main className="mx-auto flex min-h-[76svh] max-w-2xl flex-col items-center justify-center px-5 py-16 text-center">
       <span className="grid h-14 w-14 place-items-center rounded-2xl border border-line bg-paper text-muted">
         <Compass size={22} aria-hidden="true" />
       </span>
@@ -15,6 +17,6 @@ export default function NotFound() {
       <Link href="/" className="mt-6 inline-flex h-10 items-center gap-2 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-paper hover:bg-ink-soft">
         <ArrowLeft size={14} aria-hidden="true" /> World map
       </Link>
-    </div>
+    </main>
   );
 }

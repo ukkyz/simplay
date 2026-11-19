@@ -158,7 +158,7 @@ export function BuildingPage({
         lat: site.center.lat - 0.00019,
         lng: site.center.lng + 0.00016,
         kind: "player",
-        label: `${player.name.split(" ")[0]} · you`,
+        label: `${player.name.split(" ")[0]} · shared player`,
         initials: player.initials,
         avatarColor: "#172019",
         tone: "lime",
