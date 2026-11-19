@@ -4,7 +4,7 @@ import { MODELS, PROVIDERS } from "../lib/data";
 import type { ActivityEntry, Building } from "../lib/types";
 import type { WorldCommand, WorldCommandResult } from "../lib/world-commands";
 import { BUILDING_CATEGORIES, BUILDING_SLOTS, maxCarvedArea, splitFootprint } from "../lib/world-rules";
-import { databasePath, openDatabase, type Database } from "./client";
+import { getDatabase, writeDatabase, type Database } from "./client";
 import { DEMO_PLAYER, DEMO_WORLD } from "./fixtures";
 import { activity, areas, bots, buildings, players, rooms } from "./schema";
 import { insertBuilding, readPlayer, replaceWorld, WorldError, type WriteTx } from "./world-storage";
@@ -121,13 +121,11 @@ async function apply(tx: WriteTx, command: WorldCommand): Promise<string | undef
 }
 
 export function createWorldRepository(db: Database) {
-  // Serialize writers in this Node process; SQLite also locks across processes.
-  let pending = Promise.resolve();
   const read = () => readPlayer(db, playerId);
   return {
     read,
     execute(command: WorldCommand): Promise<WorldCommandResult> {
-      const operation = pending.then(async () => {
+      return writeDatabase(db, async () => {
         const createdId = await db.transaction(async (tx) => {
           const [player] = await tx.update(players).set({ revision: sql`${players.revision} + 1` })
             .where(playerKey).returning({ id: players.id });
@@ -136,13 +134,11 @@ export function createWorldRepository(db: Database) {
         });
         return { snapshot: await read(), createdId };
       });
-      pending = operation.then(() => undefined, () => undefined);
-      return operation;
     },
   };
 }
 
 let repository: ReturnType<typeof createWorldRepository> | undefined;
 export function getWorldRepository() {
-  return (repository ??= createWorldRepository(openDatabase(databasePath()).db));
+  return (repository ??= createWorldRepository(getDatabase()));
 }

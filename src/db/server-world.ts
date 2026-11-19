@@ -1,5 +1,10 @@
+import "server-only";
 import { cache } from "react";
+import { requireAccount } from "../auth/server";
 import { getWorldRepository } from "./world-repository";
 
-// Share one SQLite snapshot between the layout and route metadata for a render.
-export const readWorld = cache(() => getWorldRepository().read());
+// Metadata and layouts share a request-local snapshot, never a public cache.
+export const readWorld = cache(async () => {
+  await requireAccount();
+  return getWorldRepository().read();
+});

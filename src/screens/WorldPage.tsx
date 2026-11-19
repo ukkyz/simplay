@@ -33,7 +33,7 @@ const TONE_BY_INDEX = ["lime", "sky", "violet", "coral"] as const;
 
 export function WorldPage() {
   const navigate = useNavigate();
-  const { world, player: viewer, presence, notify } = useSimplayz();
+  const { world, player: sharedPlayer, presence, notify } = useSimplayz();
   const mapShellRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [mapLocation, setMapLocation] = useState({ lat: 51.9175, lng: 4.481, zoom: 14 });
@@ -181,14 +181,14 @@ export function WorldPage() {
           lat: player.lat,
           lng: player.lng,
           kind: "player" as const,
-          label: player.status === "You" ? `${viewer.name.split(" ")[0]} · you` : player.name.split(" ")[0],
+          label: player.status === "You" ? `${sharedPlayer.name.split(" ")[0]} · shared player` : player.name.split(" ")[0],
           initials: player.initials,
           avatarColor: player.color,
           tone: "lime" as const,
           onClick: () =>
             notify(
-              player.status === "You" ? "This is you" : `${player.name} is online`,
-              player.status === "You" ? `${viewer.name} · ${viewer.title} · Lvl ${viewer.level}` : `${player.status} in Rotterdam · nearby`,
+              player.status === "You" ? "Shared world player" : `${player.name} is online`,
+              player.status === "You" ? `${sharedPlayer.name} · ${sharedPlayer.title} · Lvl ${sharedPlayer.level}` : `${player.status} in Rotterdam · nearby`,
               "lime",
             ),
         }))
@@ -196,7 +196,7 @@ export function WorldPage() {
   ];
 
   const enterSelectedArea = () => {
-    if (selectedArea) navigate(`/user/${viewer.id}/area/${selectedArea.id}`);
+    if (selectedArea) navigate(`/user/${sharedPlayer.id}/area/${selectedArea.id}`);
   };
 
   const requestFullscreen = async () => {
@@ -689,7 +689,7 @@ export function WorldPage() {
                     key={player.id}
                     className="grid h-7 w-7 place-items-center rounded-full border-2 border-paper font-display text-[9px] font-bold text-white"
                     style={{ background: player.color }}
-                    title={`${player.name} · ${player.status}`}
+                    title={`${player.name} · ${player.status === "You" ? "Shared player" : player.status}`}
                   >
                     {player.initials}
                   </span>
@@ -712,7 +712,7 @@ export function WorldPage() {
           <Panel className="overflow-hidden border-line/80 bg-paper/95 shadow-float backdrop-blur-xl">
             <button
               type="button"
-              onClick={() => navigate(`/user/${viewer.id}/ai/management`)}
+              onClick={() => navigate(`/user/${sharedPlayer.id}/ai/management`)}
               className="group flex w-full items-center justify-between gap-3 px-3.5 pb-2 pt-3 text-left"
             >
               <span className="font-mono text-[8px] font-semibold uppercase tracking-[.1em] text-muted">
@@ -727,7 +727,7 @@ export function WorldPage() {
                 <button
                   key={bot.id}
                   type="button"
-                  onClick={() => navigate(`/user/${viewer.id}/ai/management`)}
+                  onClick={() => navigate(`/user/${sharedPlayer.id}/ai/management`)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-bone/40"
                 >
                   <BotAvatar bot={bot} size={26} />

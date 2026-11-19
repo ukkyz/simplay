@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { signOut } from "@/auth/actions";
+import type { AuthFormState, SignedInAccount } from "@/auth/credentials";
 import {
   Bell,
   Bot,
@@ -11,6 +13,7 @@ import {
   Globe2,
   LayoutGrid,
   LifeBuoy,
+  LogOut,
   Map as MapIcon,
   RotateCcw,
   Sparkles,
@@ -19,9 +22,10 @@ import {
 import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
 import { cn } from "@/utils/cn";
-import { Avatar, BotAvatar, Wordmark } from "./ui";
+import { Wordmark } from "./Brand";
+import { Avatar, BotAvatar } from "./ui";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, account }: { children: React.ReactNode; account: SignedInAccount }) {
   const navigate = useNavigate();
   const pathname = usePathname();
   const { world, player, execute, isSaving, notify } = useSimplayz();
@@ -33,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const aiHref = `${root}/ai/management`;
   const navItems = [
     { key: "world", label: "World map", icon: Globe2, href: "/" },
-    { key: "area", label: "My areas", icon: MapIcon, href: areaHref },
+    { key: "area", label: "Shared areas", icon: MapIcon, href: areaHref },
     { key: "building", label: "Building sites", icon: Building2, href: buildingHref },
     { key: "ai", label: "AI management", icon: Sparkles, href: aiHref },
   ] as const;
@@ -41,6 +45,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     : pathname === aiHref ? "ai"
     : pathname.startsWith(`${root}/area/`) ? (pathname.includes("/building/") ? "building" : "area") : "";
   const [menuOpen, setMenuOpen] = useState(false);
+  const accountButton = useRef<HTMLButtonElement>(null);
+  const [logoutState, logoutAction, signingOut] = useActionState<AuthFormState, FormData>(signOut, {});
+  const initials = account.username.slice(0, 2).toUpperCase();
   const onlineBots = world.bots.filter((bot) => bot.status === "online").length;
 
   return (
@@ -135,92 +142,103 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="absolute right-[9px] top-[8px] h-1.5 w-1.5 rounded-full border border-paper bg-coral" />
             </button>
 
-            <div className="relative">
+            <div
+              className="relative"
+              onBlur={(event) => {
+                if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && menuOpen) {
+                  setMenuOpen(false);
+                  accountButton.current?.focus();
+                }
+              }}
+            >
               <button
+                ref={accountButton}
                 type="button"
                 onClick={() => setMenuOpen((open) => !open)}
-                aria-label={`${player.name} profile`}
-                aria-haspopup="menu"
+                aria-label={`Account: ${account.username}`}
                 aria-expanded={menuOpen}
-                className="flex items-center gap-2 rounded-full border border-line bg-paper py-1 pl-1 pr-1.5 transition-colors hover:border-line-strong sm:pr-2.5"
+                aria-controls="account-panel"
+                className="relative z-[45] flex items-center gap-2 rounded-full border border-line bg-paper py-1 pl-1 pr-1.5 transition-colors hover:border-line-strong sm:pr-2.5"
               >
                 <span className="relative">
-                  <Avatar initials={player.initials} color="#172019" size={30} label={player.name} />
+                  <Avatar initials={initials} color="#172019" size={30} />
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-lime-deep" />
                 </span>
-                <span className="hidden text-left leading-none sm:block">
-                  <span className="block text-[10.5px] font-bold text-ink">{player.name}</span>
-                  <span className="mt-1 block font-mono text-[8px] uppercase tracking-[.04em] text-muted">
-                    Lvl {player.level} · Player
-                  </span>
+                <span className="hidden min-w-0 max-w-28 text-left leading-none sm:block">
+                  <span className="block truncate text-[11px] font-bold text-ink">{account.username}</span>
+                  <span className="mt-1 block font-mono text-[9px] uppercase tracking-[.04em] text-ink-soft">Signed in</span>
                 </span>
                 <ChevronDown size={12} className="hidden text-muted sm:block" />
               </button>
 
-              {menuOpen && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close menu"
-                    className="fixed inset-0 z-40 cursor-default"
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-[calc(100%+8px)] z-50 w-[256px] overflow-hidden rounded-[18px] border border-line bg-paper p-2 shadow-float animate-pop"
-                  >
-                    <div className="flex items-center gap-3 rounded-xl bg-bone/60 p-2.5">
-                      <Avatar initials={player.initials} color="#172019" size={36} />
-                      <div className="min-w-0">
-                        <div className="truncate text-[12px] font-bold">{player.name}</div>
-                        <div className="truncate font-mono text-[9px] text-muted">{player.handle}</div>
-                      </div>
-                    </div>
-                    <div className="my-1.5 h-px bg-line" />
-                    {[
-                      { label: "World map", icon: Globe2, href: "/" },
-                      { label: "My primary area", icon: LayoutGrid, href: areaHref },
-                      { label: "AI management", icon: Bot, href: aiHref },
-                    ].map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.label}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            navigate(item.href);
-                            setMenuOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11.5px] font-medium text-ink/80 transition-colors hover:bg-ink/[.05] hover:text-ink"
-                        >
-                          <Icon size={14} className="text-muted" />
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                    <div className="my-1.5 h-px bg-line" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={isSaving}
-                      onClick={async () => {
-                        if (!window.confirm("Reset the shared demo world? Saved edits will be replaced by the starter data.")) return;
-                        setMenuOpen(false);
-                        if (await execute({ type: "reset" })) notify("World reset", "The starter data has been restored.", "lime");
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11.5px] font-medium text-muted transition-colors hover:bg-ink/[.05] hover:text-ink"
-                    >
-                      <RotateCcw size={14} />
-                      Reset simulation
-                    </button>
-                    <div className="flex items-center gap-2 px-2.5 pb-1 pt-2 font-mono text-[8px] uppercase tracking-[.05em] text-muted-light">
-                      <LifeBuoy size={11} />
-                      Simplayz build 0.16.4
-                    </div>
+              {menuOpen && <div aria-hidden="true" className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />}
+              <div
+                id="account-panel"
+                hidden={!menuOpen}
+                className="absolute right-0 top-[calc(100%+8px)] z-50 w-[256px] rounded-[18px] border border-line bg-paper p-2 shadow-float"
+              >
+                <div className="flex items-center gap-3 rounded-xl bg-bone/60 p-2.5">
+                  <Avatar initials={initials} color="#172019" size={36} />
+                  <div className="min-w-0">
+                    <div className="break-all text-sm font-bold">@{account.username}</div>
+                    <div className="text-xs text-ink-soft">{account.ownsWorld ? "World owner" : "Shared-world member"}</div>
                   </div>
-                </>
-              )}
+                </div>
+                <div className="my-1.5 h-px bg-line" />
+                {[
+                  { label: "World map", icon: Globe2, href: "/" },
+                  { label: "Primary area", icon: LayoutGrid, href: areaHref },
+                  { label: "AI management", icon: Bot, href: aiHref },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => {
+                        navigate(item.href);
+                        setMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11.5px] font-medium text-ink/80 transition-colors hover:bg-ink/[.05] hover:text-ink"
+                    >
+                      <Icon size={14} className="text-muted" />
+                      {item.label}
+                    </button>
+                  );
+                })}
+                <div className="my-1.5 h-px bg-line" />
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={async () => {
+                    if (!window.confirm("Reset the shared demo world? Saved edits will be replaced by the starter data.")) return;
+                    setMenuOpen(false);
+                    if (await execute({ type: "reset" })) notify("World reset", "The starter data has been restored.", "lime");
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-ink/[.05] hover:text-ink"
+                >
+                  <RotateCcw size={14} />
+                  Reset simulation
+                </button>
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    disabled={signingOut}
+                    className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-ink transition-colors hover:bg-ink/[.05] disabled:opacity-70"
+                  >
+                    <LogOut size={14} aria-hidden="true" />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </button>
+                  {logoutState.error && <p role="alert" className="px-2.5 py-1 text-xs font-semibold text-[#762c19]">{logoutState.error}</p>}
+                </form>
+                <div className="flex items-center gap-2 px-2.5 pb-1 pt-2 font-mono text-[9px] uppercase tracking-[.05em] text-ink-soft">
+                  <LifeBuoy size={11} aria-hidden="true" />
+                  Simplayz build 0.16.4
+                </div>
+              </div>
             </div>
           </div>
         </div>

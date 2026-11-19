@@ -16,3 +16,22 @@ export function openDatabase(path: string) {
 }
 
 export type Database = ReturnType<typeof openDatabase>["db"];
+
+// Next can load the DB module from different route bundles in the same process.
+const processGlobals = globalThis as typeof globalThis & {
+  simplayzDatabase?: Database;
+  simplayzWriters?: WeakMap<Database, Promise<void>>;
+};
+export function getDatabase() {
+  return (processGlobals.simplayzDatabase ??= openDatabase(databasePath()).db);
+}
+
+const writers = (processGlobals.simplayzWriters ??= new WeakMap());
+
+// Auth and world edits use the same queue so a synchronous SQLite lock wait
+// cannot block another transaction in this Node process from committing.
+export function writeDatabase<T>(db: Database, work: () => Promise<T>): Promise<T> {
+  const result = (writers.get(db) ?? Promise.resolve()).then(work);
+  writers.set(db, result.then(() => undefined, () => undefined));
+  return result;
+}

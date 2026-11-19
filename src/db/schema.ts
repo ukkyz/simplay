@@ -18,6 +18,28 @@ export const players = sqliteTable("players", {
   revision: integer("revision").notNull().default(0),
 });
 
+export const accounts = sqliteTable("accounts", {
+  username: text("username").primaryKey().notNull(),
+  passwordHash: text("password_hash").notNull(),
+  ownedPlayerId: text("owned_player_id").references(() => players.id, { onDelete: "set null" }).unique(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const authSessions = sqliteTable("auth_sessions", {
+  tokenHash: text("token_hash").primaryKey().notNull(),
+  username: text("username").notNull().references(() => accounts.username, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at").notNull(),
+}, (t) => [
+  index("auth_sessions_username_idx").on(t.username),
+  index("auth_sessions_expiry_idx").on(t.expiresAt),
+]);
+
+export const authAttempts = sqliteTable("auth_attempts", {
+  key: text("key").primaryKey().notNull(),
+  count: integer("count").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+}, (t) => [index("auth_attempts_expiry_idx").on(t.expiresAt)]);
+
 const playerId = () => text("player_id").notNull().references(() => players.id, { onDelete: "cascade" });
 
 export const playerPresence = sqliteTable("player_presence", {

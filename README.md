@@ -1,6 +1,6 @@
 # Simplayz
 
-Explore a Rotterdam world on OpenStreetMap, edit buildings and room layouts, and configure a simulated AI crew. Next.js serves the app, and Drizzle stores the player profile, world, and changes in SQLite. Browser sessions connected to the same server see the same **demo** world. There is no account sign-in, live player presence, or real model execution.
+Explore a Rotterdam world on OpenStreetMap, edit buildings and room layouts, and configure a simulated AI crew. Next.js serves the app, and Drizzle stores accounts, sessions, and world changes in SQLite. All signed-in accounts can edit the **same** world. Player presence and model execution are simulated.
 
 ## Run locally
 
@@ -13,6 +13,21 @@ npm run dev
 ```
 
 Open `http://localhost:3000` locally or the forwarded preview in a remote workspace. SQLite defaults to `.data/simplayz.sqlite`. Set `DATABASE_PATH` in the environment or `.env.local` to use another file (see [`.env.example`](.env.example)).
+
+## Accounts and the shared world
+
+Visit `/register` to create an account and sign in. Usernames are case-insensitive and use 3–24 ASCII letters, digits, underscores, or hyphens; the first character must be a letter or digit. Use a password of 12–128 characters. To leave, choose **Sign out** in the header's account panel. Guests only have access to the sign-in and signup screens.
+
+To link the existing save to its reserved owner login, run this once in a local terminal against the same database used by the app:
+
+```sh
+npm run db:setup
+npm run auth:alex
+```
+
+Enter and confirm a password at the hidden prompts, then sign in as `alex`. There is no default password, and public signup cannot claim `alex`. The command never replaces an existing account or changes the world. For unattended setup, `npm run auth:alex -- --stdin` accepts one password via a private pipe; do not pass it as a command-line argument.
+
+Every signed-in account opens the same save, including the routes below. A new account does not create another player or world. **Reset simulation** restores the starter world for everyone, without deleting any accounts.
 
 | Screen | Seeded path |
 | --- | --- |
@@ -27,7 +42,7 @@ Open `http://localhost:3000` locally or the forwarded preview in a remote worksp
 - Apply migrations with `npm run db:migrate`. `npm run db:seed` inserts the starter player, presence, layouts, bots, budget, rules, and activity only if the demo player is missing. `npm run db:setup` does both.
 - **Moving an old save:** On the old app's origin, export the raw `simplayz.world.v1` value from browser Local Storage to a JSON file (don't paste it into a prompt or commit it). Run `npm run db:setup`, then `npm run db:import -- /path/to/world.json` before making your first edit. Import validates the snapshot and refuses to overwrite an edited or already imported database. The app no longer reads or writes player data in Local Storage.
 
-For production, run database setup against a **persistent writable volume**, then `npm run build` and `npm start` with the same `DATABASE_PATH`. This is a Node server, not a static export. Use it with trusted users only: visitors to the demo can edit the same world. Add authentication and authorization before hosting private player data.
+For production, run database setup against a **persistent writable volume**, then `npm run build` and `npm start` with the same `DATABASE_PATH`. Serve the Node app over HTTPS, not as a static export. **Signup is open**: anyone who reaches your instance can register, read, and edit the save. Use network-level access controls if it should be private, and back up the SQLite database before upgrades.
 
 ## Your next AI task
 
