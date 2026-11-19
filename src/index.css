@@ -1,7 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap");
-/* Scan app templates only; keep docs and test scripts out of the bundle. */
+/* Scan app templates only; keep docs, database fixtures, and tests out of the bundle. */
 @import "tailwindcss" source(".");
-@source "../index.html";
+@source not "./db";
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;

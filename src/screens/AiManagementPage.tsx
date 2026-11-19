@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
@@ -42,9 +44,10 @@ import {
   Sparkline,
   Toggle,
 } from "@/components/ui";
-import { MODELS, PROVIDERS, USER } from "@/lib/data";
-import { navigate, usePageTitle } from "@/lib/router";
+import { MODELS, PROVIDERS } from "@/lib/data";
+import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
+import type { Bot } from "@/lib/types";
 import { cn } from "@/utils/cn";
 
 const roleIcons: Record<string, LucideIcon> = {
@@ -65,9 +68,10 @@ const roleTone: Record<string, "coral" | "sky" | "lime"> = {
   COO: "lime",
 };
 
-export function AiManagementPage({ userId }: { userId: string }) {
-  usePageTitle("AI Management");
-  const { world, updateBot, setRule, addActivity, notify } = useSimplayz();
+export function AiManagementPage() {
+  const navigate = useNavigate();
+  const { world, player, execute, isSaving, notify } = useSimplayz();
+  const primaryArea = world.areas[0];
   const [configBotId, setConfigBotId] = useState<string | null>(null);
   const configBot = world.bots.find((bot) => bot.id === configBotId) ?? null;
 
@@ -110,33 +114,17 @@ export function AiManagementPage({ userId }: { userId: string }) {
     },
   ];
 
-  const deploy = () => {
-    addActivity({
-      bot: "system",
-      title: "Crew configuration deployed",
-      detail: `${world.bots.length} bots live · ${activeRules} policies enforced · prompt registry signed`,
-      tone: "neutral",
-    });
-    notify(
-      "Crew configuration deployed",
-      "All three bots are live on the current routing table. Human approval remains available.",
-      "lime",
-    );
+  const deploy = async () => {
+    if (await execute({ type: "deploy-crew" })) {
+      notify("Crew configuration saved", "Recorded in the demo activity log. No model call was made.", "lime");
+    }
   };
 
-  const togglePaused = (id: "cto" | "cfo" | "coo", current: string) => {
-    updateBot(id, { status: current === "online" ? "paused" : "online" });
-    addActivity({
-      bot: id,
-      title: current === "online" ? "Bot paused" : "Bot resumed",
-      detail: current === "online" ? "Task queue held. Model routing preserved." : "Task queue resumed with the existing model.",
-      tone: "neutral",
-    });
-    notify(
-      current === "online" ? "Bot paused" : "Bot resumed",
-      current === "online" ? "Queued tasks will wait for an explicit resume." : "The bot is picking up its queued task.",
-      "neutral",
-    );
+  const togglePaused = async (id: Bot["id"], current: Bot["status"]) => {
+    const status = current === "online" ? "paused" : "online";
+    if (await execute({ type: "set-bot-status", botId: id, status })) {
+      notify(status === "paused" ? "Bot paused" : "Bot resumed", "Model routing preserved.", "neutral");
+    }
   };
 
   return (
@@ -180,7 +168,7 @@ export function AiManagementPage({ userId }: { userId: string }) {
             <History size={14} />
             Activity log
           </Button>
-          <Button variant="primary" size="md" onClick={deploy}>
+          <Button variant="primary" size="md" onClick={deploy} disabled={isSaving}>
             <Cloud size={14} />
             Deploy changes
           </Button>
@@ -340,6 +328,7 @@ export function AiManagementPage({ userId }: { userId: string }) {
                 <button
                   type="button"
                   onClick={() => setConfigBotId(bot.id)}
+                  disabled={isSaving}
                   className="group/model flex w-full items-center gap-2.5 rounded-xl border border-line bg-bone/30 p-2.5 text-left transition-all hover:border-ink/40 hover:bg-paper"
                 >
                   {provider && <ProviderMark provider={provider} size={26} />}
@@ -382,7 +371,7 @@ export function AiManagementPage({ userId }: { userId: string }) {
                 </div>
 
                 <div className="mt-auto flex items-center gap-1.5 pt-3">
-                  <Button variant="primary" size="sm" className="flex-1" onClick={() => setConfigBotId(bot.id)}>
+                  <Button variant="primary" size="sm" className="flex-1" onClick={() => setConfigBotId(bot.id)} disabled={isSaving}>
                     <SlidersHorizontal size={11} />
                     Configure
                   </Button>
@@ -393,6 +382,7 @@ export function AiManagementPage({ userId }: { userId: string }) {
                     aria-label={bot.status === "online" ? `Pause ${bot.name}` : `Resume ${bot.name}`}
                     title={bot.status === "online" ? "Pause bot" : "Resume bot"}
                     onClick={() => togglePaused(bot.id, bot.status)}
+                    disabled={isSaving}
                   >
                     {bot.status === "online" ? <Pause size={11} /> : <Play size={11} />}
                   </Button>
@@ -435,13 +425,11 @@ export function AiManagementPage({ userId }: { userId: string }) {
                   </div>
                   <Toggle
                     checked={world.routingRules[policy.key]}
-                    onChange={(value) => {
-                      setRule(policy.key, value);
-                      notify(
-                        `${policy.title} ${value ? "enabled" : "disabled"}`,
-                        "Policy applies to the next model call.",
-                        value ? "lime" : "neutral",
-                      );
+                    disabled={isSaving}
+                    onChange={async (checked) => {
+                      if (await execute({ type: "set-rule", key: policy.key, checked })) {
+                        notify(`${policy.title} ${checked ? "enabled" : "disabled"}`, "Saved to the demo routing settings.", checked ? "lime" : "neutral");
+                      }
                     }}
                     label={policy.title}
                   />
@@ -756,7 +744,7 @@ export function AiManagementPage({ userId }: { userId: string }) {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => navigate(`/user/${userId || USER.id}/area/delfshaven-yard`)}
+            onClick={() => navigate(primaryArea ? `/user/${player.id}/area/${primaryArea.id}` : "/")}
           >
             <Layers size={11} />
             Back to the world
@@ -770,27 +758,12 @@ export function AiManagementPage({ userId }: { userId: string }) {
         <BotConfigModal
           bot={configBot}
           onClose={() => setConfigBotId(null)}
-          onSave={(patch) => {
-            const promptChanged = Boolean(patch.systemPrompt && patch.systemPrompt !== configBot.systemPrompt);
-            const [major, minor] = configBot.promptVersion.replace("v", "").split(".").map(Number);
-            const nextPatch = promptChanged
-              ? { ...patch, promptVersion: `v${major}.${(minor || 0) + 1}` }
-              : patch;
-            updateBot(configBot.id, nextPatch);
-            const nextModel = MODELS.find((model) => model.id === patch.model);
-            const nextProvider = PROVIDERS.find((provider) => provider.id === patch.provider);
-            addActivity({
-              bot: configBot.id,
-              title: "Model route updated",
-              detail: `${configBot.name} now runs ${nextModel?.name ?? patch.model} on ${nextProvider?.name ?? patch.provider} · temp ${(patch.temperature ?? configBot.temperature).toFixed(1)}`,
-              tone: configBot.id === "cto" ? "coral" : configBot.id === "cfo" ? "sky" : "lime",
-            });
-            notify(
-              `${configBot.name} rerouted`,
-              `${nextProvider?.name ?? "Provider"} · ${nextModel?.name ?? "model"} saved. Deploy to push to runtime.`,
-              "lime",
-            );
-            setConfigBotId(null);
+          isSaving={isSaving}
+          onSave={async (settings) => {
+            if (await execute({ type: "save-bot", botId: configBot.id, settings })) {
+              notify(`${configBot.name} configuration saved`, "The model, settings, and prompt are saved for this world.", "lime");
+              setConfigBotId(null);
+            }
           }}
         />
       )}

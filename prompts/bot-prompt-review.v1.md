@@ -5,8 +5,8 @@
 - **Expected response:** Version/changelog, candidate or findings, and an eval table.
 
 ```text
-Read AGENTS.md, prompts/README.md (eval workflow), src/lib/data.ts, and the
-bot config path in docs/architecture.md. Test prompt is a fixture preview.
+Read AGENTS.md, prompts/README.md (eval workflow), src/db/fixtures.ts,
+and the bot config path in docs/architecture.md. Test prompt is a fixture preview.
 Mode: [draft only / review / implement — pick one].
 Bot: [ID, role, and task].
 Version: [current → proposed and one-line rationale].

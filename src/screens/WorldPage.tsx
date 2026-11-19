@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -22,21 +24,21 @@ import {
 } from "lucide-react";
 import { OsmMap, type MapMarker } from "@/components/OsmMap";
 import { BotAvatar, Button, Badge, Kbd, Panel, Toggle } from "@/components/ui";
-import { LOCATIONS, PLAYER_PRESENCE, USER } from "@/lib/data";
-import { navigate, usePageTitle } from "@/lib/router";
+import { LOCATIONS } from "@/lib/data";
+import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
 import { cn } from "@/utils/cn";
 
 const TONE_BY_INDEX = ["lime", "sky", "violet", "coral"] as const;
 
 export function WorldPage() {
-  usePageTitle("World");
-  const { world, notify } = useSimplayz();
+  const navigate = useNavigate();
+  const { world, player: viewer, presence, notify } = useSimplayz();
   const mapShellRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [mapLocation, setMapLocation] = useState({ lat: 51.9175, lng: 4.481, zoom: 14 });
   const [viewCoords, setViewCoords] = useState({ lat: 51.9175, lng: 4.481, zoom: 14 });
-  const [selectedAreaId, setSelectedAreaId] = useState<string | null>("delfshaven-yard");
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(world.areas[0]?.id ?? null);
   const [customPlace, setCustomPlace] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -80,7 +82,7 @@ export function WorldPage() {
       setSelectedAreaId(null);
       setCustomPlace(`${place.name}, ${place.region}`);
     } else if (place.name === "Rotterdam") {
-      setSelectedAreaId((current) => current ?? "delfshaven-yard");
+      setSelectedAreaId((current) => current ?? primaryArea?.id ?? null);
       setCustomPlace(null);
     } else {
       setSelectedAreaId(null);
@@ -174,19 +176,19 @@ export function WorldPage() {
         }))
       : []),
     ...(showPlayers
-      ? PLAYER_PRESENCE.map((player) => ({
+      ? presence.map((player) => ({
           id: player.id,
           lat: player.lat,
           lng: player.lng,
           kind: "player" as const,
-          label: player.status === "You" ? "Alex · you" : player.name.split(" ")[0],
+          label: player.status === "You" ? `${viewer.name.split(" ")[0]} · you` : player.name.split(" ")[0],
           initials: player.initials,
           avatarColor: player.color,
           tone: "lime" as const,
           onClick: () =>
             notify(
               player.status === "You" ? "This is you" : `${player.name} is online`,
-              player.status === "You" ? "Alex Rivera · World builder · Lvl 24" : `${player.status} in Rotterdam · nearby`,
+              player.status === "You" ? `${viewer.name} · ${viewer.title} · Lvl ${viewer.level}` : `${player.status} in Rotterdam · nearby`,
               "lime",
             ),
         }))
@@ -194,7 +196,7 @@ export function WorldPage() {
   ];
 
   const enterSelectedArea = () => {
-    if (selectedArea) navigate(`/user/${USER.id}/area/${selectedArea.id}`);
+    if (selectedArea) navigate(`/user/${viewer.id}/area/${selectedArea.id}`);
   };
 
   const requestFullscreen = async () => {
@@ -240,7 +242,7 @@ export function WorldPage() {
                 </span>
               </div>
               <span className="rounded-full border border-line bg-bone/70 px-1.5 py-0.5 font-mono text-[7.5px] font-medium uppercase tracking-[.04em] text-muted">
-                6 online
+                {presence.length} online
               </span>
             </div>
 
@@ -682,7 +684,7 @@ export function WorldPage() {
             </div>
             <div className="flex items-center gap-2 px-3.5 pb-3">
               <div className="flex -space-x-2">
-                {PLAYER_PRESENCE.slice(0, 5).map((player) => (
+                {presence.slice(0, 5).map((player) => (
                   <span
                     key={player.id}
                     className="grid h-7 w-7 place-items-center rounded-full border-2 border-paper font-display text-[9px] font-bold text-white"
@@ -710,7 +712,7 @@ export function WorldPage() {
           <Panel className="overflow-hidden border-line/80 bg-paper/95 shadow-float backdrop-blur-xl">
             <button
               type="button"
-              onClick={() => navigate(`/user/${USER.id}/ai/management`)}
+              onClick={() => navigate(`/user/${viewer.id}/ai/management`)}
               className="group flex w-full items-center justify-between gap-3 px-3.5 pb-2 pt-3 text-left"
             >
               <span className="font-mono text-[8px] font-semibold uppercase tracking-[.1em] text-muted">
@@ -725,7 +727,7 @@ export function WorldPage() {
                 <button
                   key={bot.id}
                   type="button"
-                  onClick={() => navigate(`/user/${USER.id}/ai/management`)}
+                  onClick={() => navigate(`/user/${viewer.id}/ai/management`)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-bone/40"
                 >
                   <BotAvatar bot={bot} size={26} />

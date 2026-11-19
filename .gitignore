@@ -1,5 +1,12 @@
 node_modules/
 dist/
+.next/
+next-env.d.ts
+.data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
 *.tsbuildinfo
 
 coverage/

@@ -2,7 +2,7 @@
 
 ## What the app shows vs. what it measures
 
-[`Scene3D.tsx`](../src/components/Scene3D.tsx) builds procedural mesh previews from the layout. [`ASSET_BUDGET` and `basePrompt`](../src/lib/data.ts) are fixtures, not live counters or build gates.
+[`Scene3D.tsx`](../src/components/Scene3D.tsx) builds procedural mesh previews from the layout. [`ASSET_BUDGET`](../src/lib/data.ts) and the [seed `basePrompt`](../src/db/fixtures.ts) are fixtures, not live counters or build gates.
 
 | Metric | Area panel fixture (shown / cap) | Seed bot prompt warns above |
 | --- | --- | --- |

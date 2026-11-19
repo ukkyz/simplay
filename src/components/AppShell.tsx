@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   Bell,
@@ -13,31 +16,30 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { USER } from "@/lib/data";
-import { navigate, useRoute, type Route } from "@/lib/router";
+import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
 import { cn } from "@/utils/cn";
 import { Avatar, BotAvatar, Wordmark } from "./ui";
 
-const navItems = [
-  { key: "world", label: "World map", icon: Globe2, href: "/" },
-  { key: "area", label: "My areas", icon: MapIcon, href: "/user/alex/area/delfshaven-yard" },
-  { key: "building", label: "Building sites", icon: Building2, href: "/user/alex/area/delfshaven-yard/building/foundry-hall" },
-  { key: "ai", label: "AI management", icon: Sparkles, href: "/user/alex/ai/management" },
-] as const;
-
-function activeKey(route: Route) {
-  if (route.name === "world") return "world";
-  if (route.name === "area") return "area";
-  if (route.name === "building") return "building";
-  if (route.name === "ai") return "ai";
-  return "";
-}
-
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const route = useRoute();
-  const active = activeKey(route);
-  const { world, resetWorld, notify } = useSimplayz();
+  const navigate = useNavigate();
+  const pathname = usePathname();
+  const { world, player, execute, isSaving, notify } = useSimplayz();
+  const root = `/user/${player.id}`;
+  const primaryArea = world.areas[0];
+  const primaryBuilding = primaryArea?.buildings[0];
+  const areaHref = primaryArea ? `${root}/area/${primaryArea.id}` : "/";
+  const buildingHref = primaryBuilding ? `${areaHref}/building/${primaryBuilding.id}` : areaHref;
+  const aiHref = `${root}/ai/management`;
+  const navItems = [
+    { key: "world", label: "World map", icon: Globe2, href: "/" },
+    { key: "area", label: "My areas", icon: MapIcon, href: areaHref },
+    { key: "building", label: "Building sites", icon: Building2, href: buildingHref },
+    { key: "ai", label: "AI management", icon: Sparkles, href: aiHref },
+  ] as const;
+  const active = pathname === "/" ? "world"
+    : pathname === aiHref ? "ai"
+    : pathname.startsWith(`${root}/area/`) ? (pathname.includes("/building/") ? "building" : "area") : "";
   const [menuOpen, setMenuOpen] = useState(false);
   const onlineBots = world.bots.filter((bot) => bot.status === "online").length;
 
@@ -104,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 sm:gap-2.5">
             <button
               type="button"
-              onClick={() => navigate("/user/alex/ai/management")}
+              onClick={() => navigate(aiHref)}
               className="hidden items-center gap-2 rounded-full border border-line bg-paper py-1 pl-1 pr-3 transition-colors hover:border-line-strong xl:flex"
             >
               <span className="flex -space-x-1.5">
@@ -137,18 +139,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setMenuOpen((open) => !open)}
+                aria-label={`${player.name} profile`}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 className="flex items-center gap-2 rounded-full border border-line bg-paper py-1 pl-1 pr-1.5 transition-colors hover:border-line-strong sm:pr-2.5"
               >
                 <span className="relative">
-                  <Avatar initials={USER.initials} color="#172019" size={30} label={USER.name} />
+                  <Avatar initials={player.initials} color="#172019" size={30} label={player.name} />
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-paper bg-lime-deep" />
                 </span>
                 <span className="hidden text-left leading-none sm:block">
-                  <span className="block text-[10.5px] font-bold text-ink">{USER.name}</span>
+                  <span className="block text-[10.5px] font-bold text-ink">{player.name}</span>
                   <span className="mt-1 block font-mono text-[8px] uppercase tracking-[.04em] text-muted">
-                    Lvl {USER.level} · Player
+                    Lvl {player.level} · Player
                   </span>
                 </span>
                 <ChevronDown size={12} className="hidden text-muted sm:block" />
@@ -167,17 +170,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className="absolute right-0 top-[calc(100%+8px)] z-50 w-[256px] overflow-hidden rounded-[18px] border border-line bg-paper p-2 shadow-float animate-pop"
                   >
                     <div className="flex items-center gap-3 rounded-xl bg-bone/60 p-2.5">
-                      <Avatar initials={USER.initials} color="#172019" size={36} />
+                      <Avatar initials={player.initials} color="#172019" size={36} />
                       <div className="min-w-0">
-                        <div className="truncate text-[12px] font-bold">{USER.name}</div>
-                        <div className="truncate font-mono text-[9px] text-muted">{USER.handle}</div>
+                        <div className="truncate text-[12px] font-bold">{player.name}</div>
+                        <div className="truncate font-mono text-[9px] text-muted">{player.handle}</div>
                       </div>
                     </div>
                     <div className="my-1.5 h-px bg-line" />
                     {[
                       { label: "World map", icon: Globe2, href: "/" },
-                      { label: "My primary area", icon: LayoutGrid, href: "/user/alex/area/delfshaven-yard" },
-                      { label: "AI management", icon: Bot, href: "/user/alex/ai/management" },
+                      { label: "My primary area", icon: LayoutGrid, href: areaHref },
+                      { label: "AI management", icon: Bot, href: aiHref },
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
@@ -200,9 +203,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => {
-                        resetWorld();
+                      disabled={isSaving}
+                      onClick={async () => {
+                        if (!window.confirm("Reset the shared demo world? Saved edits will be replaced by the starter data.")) return;
                         setMenuOpen(false);
+                        if (await execute({ type: "reset" })) notify("World reset", "The starter data has been restored.", "lime");
                       }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11.5px] font-medium text-muted transition-colors hover:bg-ink/[.05] hover:text-ink"
                     >
@@ -264,7 +269,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 export function ToastStack() {
   const { toasts, dismissToast } = useSimplayz();
-  if (!toasts.length) return null;
   const tones = {
     lime: { bg: "bg-lime", text: "text-ink", Icon: CheckCircle2 },
     coral: { bg: "bg-coral-soft", text: "text-[#9b4a2c]", Icon: Sparkles },
