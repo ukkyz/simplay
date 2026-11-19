@@ -4,16 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db.ts migrate",
     "dev": "next dev --hostname 0.0.0.0",
-    "build": "next build",
+    "build": "npm run db:migrate && next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test:db && npm run build",
     "test:db": "tsx --test scripts/*.test.ts",
     "auth:alex": "tsx scripts/auth-alex.ts",
     "smoke": "node --test scripts/smoke.mjs",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/db.ts migrate",
     "db:seed": "tsx scripts/db.ts seed",
     "db:setup": "tsx scripts/db.ts setup",
     "db:import": "tsx scripts/db.ts import"
@@ -37,7 +37,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@types/three": "^0.187.0",
-    "drizzle-kit": "0.31.11",
+    "drizzle-kit": "^0.31.11",
     "playwright": "^1.65.1",
     "postcss": "^8.5.6",
     "tailwindcss": "4.1.17",
@@ -46,5 +46,10 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "allowScripts": {
+    "es5-ext@0.10.64": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true
   }
 }
