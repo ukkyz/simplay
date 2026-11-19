@@ -1,17 +1,8 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { WORLD } from "./data";
-import type { ActivityEntry, Area, Bot, Building, Room, WorldState } from "./types";
+"use client";
 
-const STORAGE_KEY = "simplayz.world.v1";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { PlayerSnapshot } from "./types";
+import type { WorldCommand, WorldCommandResult } from "./world-commands";
 
 export interface Toast {
   id: number;
@@ -20,15 +11,9 @@ export interface Toast {
   tone: "lime" | "coral" | "sky" | "neutral";
 }
 
-interface SimplayzContextValue {
-  world: WorldState;
-  addRoom: (areaId: string, buildingId: string, room: Room) => void;
-  replaceRooms: (areaId: string, buildingId: string, rooms: Room[]) => void;
-  addBuilding: (areaId: string, building: Building) => void;
-  updateBot: (botId: Bot["id"], patch: Partial<Bot>) => void;
-  setRule: (key: keyof WorldState["routingRules"], value: boolean) => void;
-  addActivity: (entry: Omit<ActivityEntry, "id" | "time">) => void;
-  resetWorld: () => void;
+interface SimplayzContextValue extends PlayerSnapshot {
+  execute: (command: WorldCommand) => Promise<WorldCommandResult | null>;
+  isSaving: boolean;
   toasts: Toast[];
   notify: (message: string, detail?: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
@@ -36,160 +21,87 @@ interface SimplayzContextValue {
 
 const SimplayzContext = createContext<SimplayzContextValue | null>(null);
 
-const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
-function loadWorld(): WorldState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return clone(WORLD);
-    const parsed = JSON.parse(raw) as WorldState;
-    if (!Array.isArray(parsed.areas) || !Array.isArray(parsed.bots)) return clone(WORLD);
-    return parsed;
-  } catch {
-    return clone(WORLD);
-  }
-}
-
-let activityCounter = 0;
-
-export function SimplayzProvider({ children }: { children: ReactNode }) {
-  const [world, setWorld] = useState<WorldState>(loadWorld);
+export function SimplayzProvider({ children, initial }: { children: ReactNode; initial: PlayerSnapshot }) {
+  const [snapshot, setSnapshot] = useState(initial);
+  const [isSaving, setIsSaving] = useState(false);
+  const saving = useRef(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
+  const timers = useRef(new Set<number>());
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(world));
-    } catch {
-      // Persistence is a convenience; the simulation still works without it.
-    }
-  }, [world]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) return;
-      setWorld(loadWorld());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+  const receive = useCallback((next: PlayerSnapshot) => {
+    setSnapshot((current) => next.revision > current.revision ? next : current);
   }, []);
+
+  useEffect(() => receive(initial), [initial, receive]);
+  useEffect(() => {
+    // Separate browser sessions share the same demo world. Refresh on focus,
+    // without polling or allowing a stale response to overwrite a newer one.
+    let request: AbortController | undefined;
+    const refresh = async () => {
+      request?.abort();
+      request = new AbortController();
+      try {
+        const response = await fetch("/api/world", { signal: request.signal, cache: "no-store" });
+        if (response.ok) receive(await response.json() as PlayerSnapshot);
+      } catch {
+        // Keep the last acknowledged state when a background refresh fails.
+      }
+    };
+    window.addEventListener("focus", refresh);
+    return () => {
+      request?.abort();
+      window.removeEventListener("focus", refresh);
+    };
+  }, [receive]);
 
   const dismissToast = useCallback((id: number) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
-
-  const notify = useCallback(
-    (message: string, detail?: string, tone: Toast["tone"] = "neutral") => {
-      toastId.current += 1;
-      const id = toastId.current;
-      setToasts((current) => [...current.slice(-2), { id, message, detail, tone }]);
-      window.setTimeout(() => {
-        setToasts((current) => current.filter((toast) => toast.id !== id));
-      }, 4600);
-    },
-    [],
-  );
-
-  const addActivity = useCallback((entry: Omit<ActivityEntry, "id" | "time">) => {
-    activityCounter += 1;
-    setWorld((current) => ({
-      ...current,
-      activity: [
-        {
-          ...entry,
-          id: `a-${Date.now()}-${activityCounter}`,
-          time: "Just now",
-        },
-        ...current.activity,
-      ].slice(0, 12),
-    }));
+  const notify = useCallback((message: string, detail?: string, tone: Toast["tone"] = "neutral") => {
+    const id = ++toastId.current;
+    setToasts((current) => [...current.slice(-2), { id, message, detail, tone }]);
+    const timer = window.setTimeout(() => {
+      timers.current.delete(timer);
+      dismissToast(id);
+    }, 4600);
+    timers.current.add(timer);
+  }, [dismissToast]);
+  useEffect(() => {
+    const active = timers.current;
+    return () => { for (const timer of active) window.clearTimeout(timer); };
   }, []);
 
-  const addRoom = useCallback((areaId: string, buildingId: string, newRoom: Room) => {
-    setWorld((current) => ({
-      ...current,
-      areas: current.areas.map((area) =>
-        area.id !== areaId
-          ? area
-          : {
-              ...area,
-              buildings: area.buildings.map((building) =>
-                building.id !== buildingId
-                  ? building
-                  : {
-                      ...building,
-                      rooms: [...building.rooms, newRoom],
-                      metrics: {
-                        ...building.metrics,
-                        efficiency: Math.min(99, building.metrics.efficiency + 1),
-                      },
-                    },
-              ),
-            },
-      ),
-    }));
-  }, []);
+  const execute = useCallback(async (command: WorldCommand) => {
+    if (saving.current) return null;
+    saving.current = true;
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/world", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        notify("Changes not saved", body?.error ?? "Refresh the world and try again.", "coral");
+        return null;
+      }
+      const result = await response.json() as WorldCommandResult;
+      receive(result.snapshot);
+      return result;
+    } catch {
+      notify("Could not confirm the save", "Check your connection and reload the world before retrying.", "coral");
+      return null;
+    } finally {
+      saving.current = false;
+      setIsSaving(false);
+    }
+  }, [notify, receive]);
 
-  const replaceRooms = useCallback((areaId: string, buildingId: string, rooms: Room[]) => {
-    setWorld((current) => ({
-      ...current,
-      areas: current.areas.map((area) =>
-        area.id !== areaId
-          ? area
-          : {
-              ...area,
-              buildings: area.buildings.map((building) =>
-                building.id !== buildingId ? building : { ...building, rooms },
-              ),
-            },
-      ),
-    }));
-  }, []);
-
-  const addBuilding = useCallback((areaId: string, building: Building) => {
-    setWorld((current) => ({
-      ...current,
-      areas: current.areas.map((area) =>
-        area.id === areaId ? { ...area, buildings: [...area.buildings, building] } : area,
-      ),
-    }));
-  }, []);
-
-  const updateBot = useCallback((botId: Bot["id"], patch: Partial<Bot>) => {
-    setWorld((current) => ({
-      ...current,
-      bots: current.bots.map((bot) => (bot.id === botId ? { ...bot, ...patch } : bot)),
-    }));
-  }, []);
-
-  const setRule = useCallback((key: keyof WorldState["routingRules"], value: boolean) => {
-    setWorld((current) => ({
-      ...current,
-      routingRules: { ...current.routingRules, [key]: value },
-    }));
-  }, []);
-
-  const resetWorld = useCallback(() => {
-    setWorld(clone(WORLD));
-    notify("World reset", "The demo state has been restored.", "lime");
-  }, [notify]);
-
-  const value = useMemo<SimplayzContextValue>(
-    () => ({
-      world,
-      addRoom,
-      replaceRooms,
-      addBuilding,
-      updateBot,
-      setRule,
-      addActivity,
-      resetWorld,
-      toasts,
-      notify,
-      dismissToast,
-    }),
-    [world, addRoom, replaceRooms, addBuilding, updateBot, setRule, addActivity, resetWorld, toasts, notify, dismissToast],
-  );
+  const value = useMemo(() => ({
+    ...snapshot, execute, isSaving, toasts, notify, dismissToast,
+  }), [snapshot, execute, isSaving, toasts, notify, dismissToast]);
 
   return <SimplayzContext.Provider value={value}>{children}</SimplayzContext.Provider>;
 }
@@ -199,12 +111,3 @@ export function useSimplayz() {
   if (!context) throw new Error("useSimplayz must be used inside SimplayzProvider");
   return context;
 }
-
-export const findArea = (areas: Area[], areaId: string): Area | undefined =>
-  areas.find((area) => area.id === areaId);
-
-export const findBuilding = (
-  areas: Area[],
-  areaId: string,
-  buildingId: string,
-): Building | undefined => findArea(areas, areaId)?.buildings.find((b) => b.id === buildingId);

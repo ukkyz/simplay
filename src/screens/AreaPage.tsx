@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
@@ -28,7 +30,8 @@ import {
 } from "lucide-react";
 import { AreaPlan, BreadcrumbTrail, IsoThumb, StaffSummary } from "@/components/PlanViews";
 import { OsmMap, type MapMarker } from "@/components/OsmMap";
-import { Scene3D, type SceneView, type TimeOfDay } from "@/components/Scene3D";
+import type { SceneView, TimeOfDay } from "@/components/Scene3D";
+import { ScenePreview } from "@/components/ScenePreview";
 import {
   Badge,
   Button,
@@ -40,10 +43,10 @@ import {
   Progress,
   inputClass,
 } from "@/components/ui";
-import { ASSET_BUDGET, ROOM_STYLES, USER } from "@/lib/data";
-import { navigate, usePageTitle } from "@/lib/router";
+import { ASSET_BUDGET, ROOM_STYLES } from "@/lib/data";
+import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
-import type { Building, Room } from "@/lib/types";
+import { BUILDING_CATEGORIES, BUILDING_SLOTS } from "@/lib/world-rules";
 import { cn } from "@/utils/cn";
 import { PageFooter } from "@/components/AppShell";
 
@@ -53,37 +56,23 @@ const timeOptions: Array<{ id: TimeOfDay; label: string; Icon: typeof Sun }> = [
   { id: "night", label: "Night", Icon: Moon },
 ];
 
-const categoryOptions = [
-  { id: "studio", label: "Innovation studio", accent: "#cf6d47", soft: "#f8e4d9", roof: "#b8563a" },
-  { id: "social", label: "Social club", accent: "#5c8ca4", soft: "#e1edf2", roof: "#3f6f86" },
-  { id: "garden", label: "Community garden", accent: "#6f9a4f", soft: "#e6efdb", roof: "#4f7d56" },
-  { id: "residence", label: "Residential co-op", accent: "#a8834e", soft: "#f2e8d5", roof: "#8c6c3e" },
-  { id: "workshop", label: "Workshop", accent: "#9d83c2", soft: "#ece4f6", roof: "#8066a5" },
-];
-
-const planSlots = [
-  { x: 14, y: 10, w: 7, h: 5 },
-  { x: 2, y: 10, w: 8, h: 5 },
-  { x: 13, y: 2, w: 8, h: 6 },
-];
-
 export function AreaPage({ userId, areaId }: { userId: string; areaId: string }) {
-  const { world, addBuilding, addActivity, notify } = useSimplayz();
+  const navigate = useNavigate();
+  const { world, player, execute, isSaving, notify } = useSimplayz();
   const area = world.areas.find((candidate) => candidate.id === areaId);
-  usePageTitle(area ? `${area.name} · Area` : "Area not found");
   const [selectedBuildingId, setSelectedBuildingId] = useState(area?.buildings[0]?.id ?? "");
   const [view, setView] = useState<SceneView>("iso");
   const [time, setTime] = useState<TimeOfDay>("day");
   const [planZoom, setPlanZoom] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newCategory, setNewCategory] = useState(categoryOptions[0].id);
+  const [newCategory, setNewCategory] = useState<(typeof BUILDING_CATEGORIES)[number]["id"]>(BUILDING_CATEGORIES[0].id);
 
   useEffect(() => {
     setSelectedBuildingId(area?.buildings[0]?.id ?? "");
     setView("iso");
     setPlanZoom(1);
-  }, [area?.id, area?.buildings.length]);
+  }, [area?.id]);
 
   const selectedBuilding =
     area?.buildings.find((building) => building.id === selectedBuildingId) ?? area?.buildings[0];
@@ -96,8 +85,8 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
         lat: area.coordinates.lat,
         lng: area.coordinates.lng,
         kind: "player",
-        label: "Alex · area",
-        initials: USER.initials,
+        label: `${player.name.split(" ")[0]} · area`,
+        initials: player.initials,
         avatarColor: "#172019",
         tone: "lime",
       },
@@ -111,7 +100,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
         onClick: () => setSelectedBuildingId(building.id),
       })),
     ];
-  }, [area, selectedBuilding?.id]);
+  }, [area, player.initials, player.name, selectedBuilding?.id]);
 
   if (!area) {
     return (
@@ -131,60 +120,15 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
     );
   }
 
-  const addBuildingToArea = () => {
-    const trimmed = newName.trim();
-    if (trimmed.length < 2) return;
-    const palette = categoryOptions.find((category) => category.id === newCategory) ?? categoryOptions[0];
-    const slot = planSlots[area.buildings.length % planSlots.length];
-    const id = `${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}-${Date.now().toString(36).slice(-4)}`;
-    const now = Date.now();
-    const rooms: Room[] = [
-      { id: `${id}-welcome`, name: "Welcome Desk", type: "lobby", area: 28, x: 0, y: 0, w: 6, h: 5, status: "setup", occupants: 0 },
-      { id: `${id}-main`, name: "Main Floor", type: "workspace", area: 88, x: 6, y: 0, w: 9, h: 9, status: "setup", occupants: 0 },
-      { id: `${id}-focus`, name: "Focus Room", type: "focus", area: 22, x: 15, y: 0, w: 5, h: 9, status: "setup", occupants: 0 },
-      { id: `${id}-social`, name: "Common Room", type: "social", area: 46, x: 0, y: 5, w: 6, h: 9, status: "setup", occupants: 0 },
-      { id: `${id}-green`, name: "Green Corner", type: "garden", area: 60, x: 6, y: 9, w: 14, h: 5, status: "setup", occupants: 0 },
-    ];
-    const building: Building = {
-      id,
-      name: trimmed,
-      category: palette.label,
-      description:
-        "A freshly surveyed building site. Your AI crew has staged the minimum viable layout — the interior is ready for the first edit pass.",
-      level: 1,
-      accent: palette.accent,
-      accentSoft: palette.soft,
-      roof: palette.roof,
-      plan: slot,
-      rooms,
-      guard: {
-        name: "Rune Vale",
-        initials: "RV",
-        role: "Guard",
-        shift: "18:00 – 02:00",
-        status: "handoff",
-      },
-      receptionist: {
-        name: "Tess Marlow",
-        initials: "TM",
-        role: "Receptionist",
-        shift: "08:00 – 16:00",
-        status: "on-duty",
-      },
-      metrics: { efficiency: 64, power: 42, water: 37, footfall: 18 },
-    };
-    addBuilding(area.id, building);
-    addActivity({
-      bot: "cto",
-      title: "Building site provisioned",
-      detail: `${trimmed} added to ${area.name} with 5 starter rooms · LOD0–LOD3 chained`,
-      tone: "coral",
-    });
-    notify(`${trimmed} is on the plot`, "Five starter rooms placed. Minimum guard and reception cover assigned.", "lime");
-    setSelectedBuildingId(building.id);
+  const addBuildingToArea = async () => {
+    const name = newName.trim();
+    if (name.length < 2) return;
+    const result = await execute({ type: "add-building", areaId: area.id, name, category: newCategory });
+    if (!result?.createdId) return;
+    setSelectedBuildingId(result.createdId);
     setNewName("");
     setAddOpen(false);
-    void now;
+    notify(`${name} is on the plot`, "Five starter rooms placed. Minimum guard and reception cover assigned.", "lime");
   };
 
   const shareArea = async () => {
@@ -239,7 +183,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
           <Button
             variant="secondary"
             size="md"
-            onClick={() => navigate(`/user/${USER.id}/area/${area.id}/building/${selectedBuilding?.id ?? ""}`)}
+            onClick={() => navigate(`/user/${player.id}/area/${area.id}/building/${selectedBuilding?.id ?? ""}`)}
             className="hidden sm:inline-flex"
           >
             <Eye size={14} />
@@ -390,7 +334,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
                 area={area}
                 selectedId={selectedBuilding?.id}
                 onSelect={setSelectedBuildingId}
-                onOpen={(id) => navigate(`/user/${USER.id}/area/${area.id}/building/${id}`)}
+                onOpen={(id) => navigate(`/user/${player.id}/area/${area.id}/building/${id}`)}
               />
             </div>
             {selectedBuilding && (
@@ -443,7 +387,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
             }
           />
           <div className="relative mx-3 mb-2.5 min-h-[216px] flex-1 overflow-hidden rounded-xl border border-line bg-sage/40">
-            <Scene3D
+            <ScenePreview
               mode="area"
               area={area}
               selectedId={selectedBuilding?.id}
@@ -603,7 +547,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
                       className="h-7 px-2.5 text-[9.5px]"
                       onClick={(event) => {
                         event.stopPropagation();
-                        navigate(`/user/${USER.id}/area/${area.id}/building/${building.id}`);
+                        navigate(`/user/${player.id}/area/${area.id}/building/${building.id}`);
                       }}
                     >
                       Open site <ArrowRight size={10} />
@@ -727,7 +671,7 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
               <Building2 size={18} />
             </div>
             <div className="min-w-0">
-              <div className="text-[11.5px] font-bold">Next available lot · {planSlots[area.buildings.length % planSlots.length].w * 10} × {planSlots[area.buildings.length % planSlots.length].h * 10} m</div>
+              <div className="text-[11.5px] font-bold">Next available lot · {BUILDING_SLOTS[area.buildings.length % BUILDING_SLOTS.length].w * 10} × {BUILDING_SLOTS[area.buildings.length % BUILDING_SLOTS.length].h * 10} m</div>
               <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[.05em] text-muted">
                 Site lot {area.buildings.length + 1} of 5 · auto-placed
               </div>
@@ -751,10 +695,13 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
               <select
                 id="building-category"
                 value={newCategory}
-                onChange={(event) => setNewCategory(event.target.value)}
+                onChange={(event) => {
+                  const category = BUILDING_CATEGORIES.find(({ id }) => id === event.target.value);
+                  if (category) setNewCategory(category.id);
+                }}
                 className={inputClass}
               >
-                {categoryOptions.map((category) => (
+                {BUILDING_CATEGORIES.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.label}
                   </option>
@@ -806,9 +753,9 @@ export function AreaPage({ userId, areaId }: { userId: string; areaId: string })
             <Button variant="secondary" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button variant="lime" onClick={addBuildingToArea} disabled={newName.trim().length < 2}>
+            <Button variant="lime" onClick={addBuildingToArea} disabled={isSaving || newName.trim().length < 2}>
               <Plus size={13} />
-              Add building
+              {isSaving ? "Saving…" : "Add building"}
             </Button>
           </div>
         </div>

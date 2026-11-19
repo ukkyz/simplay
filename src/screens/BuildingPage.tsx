@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -33,7 +35,8 @@ import {
 import { PageFooter } from "@/components/AppShell";
 import { OsmMap, type MapMarker } from "@/components/OsmMap";
 import { BreadcrumbTrail, BuildingPlan } from "@/components/PlanViews";
-import { Scene3D, type SceneView, type TimeOfDay } from "@/components/Scene3D";
+import type { SceneView, TimeOfDay } from "@/components/Scene3D";
+import { ScenePreview } from "@/components/ScenePreview";
 import {
   Avatar,
   Badge,
@@ -45,10 +48,11 @@ import {
   PanelHead,
   inputClass,
 } from "@/components/ui";
-import { ROOM_STYLES, USER } from "@/lib/data";
-import { navigate, usePageTitle } from "@/lib/router";
+import { ROOM_STYLES } from "@/lib/data";
+import { useNavigate } from "@/lib/router";
 import { useSimplayz } from "@/lib/store";
-import type { Room, RoomType } from "@/lib/types";
+import type { RoomType } from "@/lib/types";
+import { maxCarvedArea, MIN_ROOM_AREA, splitFootprint } from "@/lib/world-rules";
 import { cn } from "@/utils/cn";
 
 const timeOptions: Array<{ id: TimeOfDay; label: string; Icon: LucideIcon }> = [
@@ -78,10 +82,10 @@ export function BuildingPage({
   areaId: string;
   buildingId: string;
 }) {
-  const { world, replaceRooms, addActivity, notify } = useSimplayz();
+  const navigate = useNavigate();
+  const { world, player, execute, isSaving, notify } = useSimplayz();
   const area = world.areas.find((candidate) => candidate.id === areaId);
   const building = area?.buildings.find((candidate) => candidate.id === buildingId);
-  usePageTitle(building ? `${building.name} · Building` : "Building not found");
 
   const [selectedRoomId, setSelectedRoomId] = useState<string>(building?.rooms[0]?.id ?? "");
   const [view, setView] = useState<SceneView>("iso");
@@ -99,49 +103,21 @@ export function BuildingPage({
     setPlanZoom(1);
   }, [building?.id]);
 
-  const largestRoom = useMemo(() => {
-    if (!building) return undefined;
-    return [...building.rooms].sort((a, b) => b.w * b.h - a.w * a.h).find((room) => Math.max(room.w, room.h) >= 6);
-  }, [building]);
-
-  useEffect(() => {
-    if (!addOpen) return;
-    setSourceRoomId(largestRoom?.id ?? building?.rooms[0]?.id ?? "");
+  const openAddRoom = () => {
+    const sorted = [...(building?.rooms ?? [])].sort((a, b) => b.w * b.h - a.w * a.h);
+    const source = sorted.find((room) => splitFootprint(room)) ?? sorted[0];
+    setSourceRoomId(source?.id ?? "");
     setRoomName("");
     setRoomType("focus");
-    setRoomSize("24");
-  }, [addOpen, largestRoom?.id, building?.rooms]);
+    setRoomSize(String(source ? Math.max(MIN_ROOM_AREA, Math.min(24, maxCarvedArea(source))) : 24));
+    setAddOpen(true);
+  };
 
   const sourceRoom = building?.rooms.find((room) => room.id === sourceRoomId);
-  const split = useMemo(() => {
-    if (!sourceRoom) return null;
-    const horizontal = sourceRoom.w >= sourceRoom.h;
-    if (horizontal && sourceRoom.w >= 6) {
-      const newW = Math.floor(sourceRoom.w / 2);
-      return {
-        horizontal,
-        rest: { ...sourceRoom, w: sourceRoom.w - newW },
-        created: { ...sourceRoom, x: sourceRoom.x + sourceRoom.w - newW, w: newW },
-      };
-    }
-    if (!horizontal && sourceRoom.h >= 6) {
-      const newH = Math.floor(sourceRoom.h / 2);
-      return {
-        horizontal,
-        rest: { ...sourceRoom, h: sourceRoom.h - newH },
-        created: { ...sourceRoom, y: sourceRoom.y + sourceRoom.h - newH, h: newH },
-      };
-    }
-    if (sourceRoom.w >= 6) {
-      const newW = Math.floor(sourceRoom.w / 2);
-      return {
-        horizontal,
-        rest: { ...sourceRoom, w: sourceRoom.w - newW },
-        created: { ...sourceRoom, x: sourceRoom.x + sourceRoom.w - newW, w: newW },
-      };
-    }
-    return null;
-  }, [sourceRoom]);
+  const split = sourceRoom ? splitFootprint(sourceRoom) : null;
+  const maxArea = sourceRoom && split ? maxCarvedArea(sourceRoom) : MIN_ROOM_AREA;
+  const requestedArea = Number(roomSize);
+  const validSize = Number.isFinite(requestedArea) && requestedArea >= MIN_ROOM_AREA && requestedArea <= maxArea;
 
   const selectedRoom = building?.rooms.find((room) => room.id === selectedRoomId) ?? building?.rooms[0];
   const totalArea = building?.rooms.reduce((sum, room) => sum + room.area, 0) ?? 0;
@@ -182,8 +158,8 @@ export function BuildingPage({
         lat: site.center.lat - 0.00019,
         lng: site.center.lng + 0.00016,
         kind: "player",
-        label: "Alex · you",
-        initials: USER.initials,
+        label: `${player.name.split(" ")[0]} · you`,
+        initials: player.initials,
         avatarColor: "#172019",
         tone: "lime",
       },
@@ -196,7 +172,7 @@ export function BuildingPage({
         tone: "sky",
       },
     ];
-  }, [site, building]);
+  }, [site, building, player.initials, player.name]);
 
   if (!area || !building) {
     return (
@@ -234,36 +210,17 @@ export function BuildingPage({
     .filter((item) => item.count > 0)
     .sort((a, b) => b.area - a.area);
 
-  const addRoom = () => {
-    if (!split || !sourceRoom || roomName.trim().length < 2) return;
-    const id = `room-${Date.now().toString(36)}`;
-    const created: Room = {
-      id,
-      name: roomName.trim(),
-      type: roomType,
-      area: Math.max(8, Number(roomSize) || 24),
-      x: split.created.x,
-      y: split.created.y,
-      w: split.created.w,
-      h: split.created.h,
-      status: "ready",
-      occupants: 0,
-    };
-    const updatedRooms = building.rooms.map((room) =>
-      room.id === sourceRoom.id
-        ? { ...room, w: split.rest.w, h: split.rest.h, area: Math.max(8, room.area - created.area) }
-        : room,
-    );
-    replaceRooms(area.id, building.id, [...updatedRooms, created]);
-    addActivity({
-      bot: "coo",
-      title: "Room added to building",
-      detail: `${created.name} carved from ${sourceRoom.name} · ${building.name}, ${area.name}`,
-      tone: "lime",
+  const addRoom = async () => {
+    const name = roomName.trim();
+    if (!split || !sourceRoom || !validSize || name.length < 2) return;
+    const result = await execute({
+      type: "split-room", areaId: area.id, buildingId: building.id, sourceRoomId: sourceRoom.id,
+      name, roomType, area: requestedArea,
     });
-    notify(`${created.name} is in the plan`, `Minimum staffing is unchanged. 3D preview rebuilt from the new layout.`, "lime");
-    setSelectedRoomId(created.id);
+    if (!result?.createdId) return;
+    setSelectedRoomId(result.createdId);
     setAddOpen(false);
+    notify(`${name} is in the plan`, "Minimum staffing is unchanged. The plan is saved.", "lime");
   };
 
   return (
@@ -271,7 +228,7 @@ export function BuildingPage({
       <BreadcrumbTrail
         items={[
           { label: "World", onClick: () => navigate("/") },
-          { label: area.name, onClick: () => navigate(`/user/${USER.id}/area/${area.id}`) },
+          { label: area.name, onClick: () => navigate(`/user/${player.id}/area/${area.id}`) },
           { label: building.name },
         ]}
         className="mb-3"
@@ -300,12 +257,12 @@ export function BuildingPage({
           <Button
             variant="secondary"
             size="md"
-            onClick={() => navigate(`/user/${USER.id}/area/${area.id}`)}
+            onClick={() => navigate(`/user/${player.id}/area/${area.id}`)}
           >
             <ArrowLeft size={13} />
             <span className="hidden sm:inline">Back to</span> {area.name}
           </Button>
-          <Button variant="primary" size="md" onClick={() => setAddOpen(true)}>
+          <Button variant="primary" size="md" onClick={openAddRoom}>
             <Plus size={15} />
             Add room
           </Button>
@@ -362,7 +319,7 @@ export function BuildingPage({
             action={
               <IconButton
                 label="Open area map"
-                onClick={() => navigate(`/user/${USER.id}/area/${area.id}`)}
+                onClick={() => navigate(`/user/${player.id}/area/${area.id}`)}
                 className="h-7 w-7 border border-line bg-paper text-muted hover:text-ink"
               >
                 <Maximize2 size={12} />
@@ -393,7 +350,7 @@ export function BuildingPage({
               </span>
               <button
                 type="button"
-                onClick={() => navigate(`/user/${USER.id}/area/${area.id}`)}
+                onClick={() => navigate(`/user/${player.id}/area/${area.id}`)}
                 className="flex items-center gap-1 text-[9px] font-semibold text-ink hover:text-muted"
               >
                 Area map <ArrowUpRight size={10} />
@@ -493,7 +450,7 @@ export function BuildingPage({
             }
           />
           <div className="relative mx-3 mb-2.5 min-h-[216px] flex-1 overflow-hidden rounded-xl border border-line bg-sage/40">
-            <Scene3D
+            <ScenePreview
               mode="building"
               building={building}
               selectedId={selectedRoom?.id}
@@ -573,7 +530,7 @@ export function BuildingPage({
           <Badge tone="lime" dot>
             Staffed 2 / 2
           </Badge>
-          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          <Button variant="secondary" size="sm" onClick={openAddRoom}>
             <Plus size={12} />
             Add room
           </Button>
@@ -675,7 +632,7 @@ export function BuildingPage({
 
           <button
             type="button"
-            onClick={() => setAddOpen(true)}
+            onClick={openAddRoom}
             className="group flex min-h-[176px] flex-col items-center justify-center rounded-[18px] border border-dashed border-line-strong bg-paper/35 px-5 text-center transition-colors hover:border-ink hover:bg-paper/70"
           >
             <span className="grid h-9 w-9 place-items-center rounded-full border border-line bg-paper text-muted transition-colors group-hover:border-ink group-hover:bg-lime group-hover:text-ink">
@@ -845,12 +802,16 @@ export function BuildingPage({
               <input
                 id="room-size"
                 type="number"
-                min={8}
-                max={180}
+                min={MIN_ROOM_AREA}
+                max={maxArea}
+                step="any"
+                aria-invalid={Boolean(split && !validSize)}
+                aria-describedby={split ? "room-size-range" : undefined}
                 value={roomSize}
                 onChange={(event) => setRoomSize(event.target.value)}
                 className={inputClass}
               />
+              {split && <p id="room-size-range" className="mt-1 text-[10px] text-muted">{MIN_ROOM_AREA}–{maxArea} m² available</p>}
             </Field>
           </div>
 
@@ -949,9 +910,9 @@ export function BuildingPage({
             <Button variant="secondary" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button variant="lime" onClick={addRoom} disabled={!split || roomName.trim().length < 2}>
+            <Button variant="lime" onClick={addRoom} disabled={isSaving || !split || !validSize || roomName.trim().length < 2}>
               <Plus size={13} />
-              Add room to plan
+              {isSaving ? "Saving…" : "Add room to plan"}
             </Button>
           </div>
         </div>

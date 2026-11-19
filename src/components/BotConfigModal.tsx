@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, FlaskConical, ShieldCheck, Sparkles, X } from "lucide-react";
 import type { Bot, ProviderId } from "@/lib/types";
+import type { BotSettings } from "@/lib/world-commands";
 import { MODELS, PROVIDERS } from "@/lib/data";
 import { cn } from "@/utils/cn";
 import {
@@ -41,10 +42,12 @@ export function BotConfigModal({
   bot,
   onClose,
   onSave,
+  isSaving,
 }: {
   bot: Bot;
   onClose: () => void;
-  onSave: (patch: Partial<Bot>) => void;
+  onSave: (settings: BotSettings) => Promise<void>;
+  isSaving: boolean;
 }) {
   const [provider, setProvider] = useState<ProviderId>(bot.provider);
   const [model, setModel] = useState(bot.model);
@@ -270,6 +273,7 @@ export function BotConfigModal({
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               rows={7}
+              maxLength={20_000}
               className={cn(inputClass, "resize-y font-mono text-[10px] leading-relaxed")}
               aria-describedby="prompt-hint"
             />
@@ -323,9 +327,9 @@ export function BotConfigModal({
             </Button>
             <Button
               variant="lime"
-              disabled={!canSave}
+              disabled={isSaving || !canSave}
               onClick={() => {
-                onSave({
+                void onSave({
                   provider,
                   model,
                   temperature,
@@ -335,7 +339,7 @@ export function BotConfigModal({
               }}
             >
               <Check size={14} />
-              Save &amp; deploy
+              {isSaving ? "Saving…" : "Save & deploy"}
             </Button>
           </div>
         </div>

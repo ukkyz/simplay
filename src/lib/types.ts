@@ -160,3 +160,18 @@ export interface AppUser {
   level: number;
   title: string;
 }
+
+export interface PlayerPresence extends LatLng {
+  id: string;
+  name: string;
+  initials: string;
+  color: string;
+  status: string;
+}
+
+export interface PlayerSnapshot {
+  player: AppUser;
+  presence: PlayerPresence[];
+  world: WorldState;
+  revision: number;
+}
