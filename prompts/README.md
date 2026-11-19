@@ -7,6 +7,7 @@ Copy one template, fill in its brackets, and point the agent at `AGENTS.md`. Lin
 | Implement, investigate, or review a scoped change | [Agent task v1](agent-task.v1.md) | v1: mode, reproduction, acceptance criteria, and evidence-based handoff. |
 | Change or review 3D art, VFX, shaders, or frame time | [Rendering change v1](rendering-change.v1.md) | v1: visual target, per-asset budgets, comparison protocol, and fallback. |
 | Author or review a Simplayz bot prompt | [Bot prompt review v1](bot-prompt-review.v1.md) | v1: output contract, grounded inputs, versioning, and evaluation cases. |
+| Prepare Simplayz for Vercel with Turso | [Vercel + Turso deployment v1](vercel-turso-deployment.v1.md) | v1: environment selection, safe migration, and deployment checks. |
 
 When a template's instructions or output contract change, add a new versioned file (e.g. `agent-task.v2.md`), keep the prior file, and record what changed in this table. Template versions are separate from `Bot.promptVersion`, the local UI label bumped when saved prompt text changes.
 
