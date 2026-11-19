@@ -1,21 +1,41 @@
-import { createClient } from "@libsql/client/sqlite3";
-import { drizzle } from "drizzle-orm/libsql/sqlite3";
+import { createClient as createTursoClient, type Client } from "@libsql/client/http";
+import { drizzle } from "drizzle-orm/libsql/http";
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { resolveDatabaseConfig, type DatabaseEnvironment } from "./config";
 
-export function databasePath() {
-  // This is runtime data on a writable volume, not a deployable asset.
-  return resolve(/*turbopackIgnore: true*/ process.env.SIMPLAY_DB_URL || ".data/simplayz.sqlite");
-}
+const requireLocal = createRequire(import.meta.url);
+const connect = (client: Client) => ({ client, db: drizzle({ client }) });
 
-export function openDatabase(path: string) {
+// Explicit file connections are also used by the isolated SQLite tests.
+export function openDatabase(file: string) {
+  // The native adapter is loaded only when using a local database.
+  const { createClient } = requireLocal("@libsql/client/sqlite3") as typeof import("@libsql/client/sqlite3");
+  const path = resolve(/*turbopackIgnore: true*/ file);
   mkdirSync(dirname(path), { recursive: true });
-  const client = createClient({ url: pathToFileURL(path).href, timeout: 2000 });
-  return { client, db: drizzle({ client }) };
+  return connect(createClient({ url: pathToFileURL(path).href, timeout: 2000 }));
 }
 
-export type Database = ReturnType<typeof openDatabase>["db"];
+export function openConfiguredDatabase(env?: DatabaseEnvironment) {
+  const config = resolveDatabaseConfig(env);
+  if (config.kind === "sqlite") return { kind: config.kind, ...openDatabase(config.path) };
+
+  const client = createTursoClient({
+    url: config.url,
+    authToken: config.authToken,
+    fetch(input: RequestInfo | URL, init?: RequestInit) {
+      // Never let Next cache database responses, and bound hung HTTP requests.
+      const parent = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      const timeout = AbortSignal.timeout(10_000);
+      return fetch(input, { ...init, cache: "no-store", signal: parent ? AbortSignal.any([parent, timeout]) : timeout });
+    },
+  });
+  return { kind: config.kind, ...connect(client) };
+}
+
+export type Database = ReturnType<typeof connect>["db"];
 
 // Next can load the DB module from different route bundles in the same process.
 const processGlobals = globalThis as typeof globalThis & {
@@ -23,13 +43,14 @@ const processGlobals = globalThis as typeof globalThis & {
   simplayzWriters?: WeakMap<Database, Promise<void>>;
 };
 export function getDatabase() {
-  return (processGlobals.simplayzDatabase ??= openDatabase(databasePath()).db);
+  // Nothing connects or migrates at import or build time.
+  return (processGlobals.simplayzDatabase ??= openConfiguredDatabase().db);
 }
 
 const writers = (processGlobals.simplayzWriters ??= new WeakMap());
 
-// Auth and world edits use the same queue so a synchronous SQLite lock wait
-// cannot block another transaction in this Node process from committing.
+// Avoid blocking a local SQLite transaction with a second writer in the same
+// process. Across instances, the database's write transactions serialize edits.
 export function writeDatabase<T>(db: Database, work: () => Promise<T>): Promise<T> {
   const result = (writers.get(db) ?? Promise.resolve()).then(work);
   writers.set(db, result.then(() => undefined, () => undefined));

@@ -1,10 +1,10 @@
 # Simplayz
 
-Explore a Rotterdam world on OpenStreetMap, edit buildings and room layouts, and configure a simulated AI crew. Next.js serves the app, and Drizzle stores accounts, sessions, and world changes in SQLite. All signed-in accounts can edit the **same** world. Player presence and model execution are simulated.
+Explore a Rotterdam world on OpenStreetMap, edit buildings and room layouts, and configure a simulated AI crew. Next.js serves the app, and Drizzle stores accounts, sessions, and world changes in local SQLite or Turso. All signed-in accounts can edit the **same** world. Player presence and model execution are simulated.
 
 ## Run locally
 
-Use Node.js 22.12+ and npm. No API keys are needed.
+Use Node.js 22.x (22.12 or newer) and npm. No API keys are needed for local SQLite.
 
 ```sh
 npm ci
@@ -12,7 +12,7 @@ npm run db:setup   # apply migrations and seed once; safe to rerun
 npm run dev
 ```
 
-Open `http://localhost:3000` locally or the forwarded preview in a remote workspace. SQLite defaults to `.data/simplayz.sqlite`. Set `DATABASE_PATH` in the environment or `.env.local` to use another file (see [`.env.example`](.env.example)).
+Open `http://localhost:3000` locally or the forwarded preview in a remote workspace. SQLite defaults to `.data/simplayz.sqlite`. Set `DATABASE_PATH` in the environment or `.env.local` to use another file (see [`.env.example`](.env.example)). Existing `SIMPLAY_DB_URL` file paths still work as a lower-priority alias.
 
 ## Accounts and the shared world
 
@@ -42,7 +42,11 @@ Every signed-in account opens the same save, including the routes below. A new a
 - Apply migrations with `npm run db:migrate`. `npm run db:seed` inserts the starter player, presence, layouts, bots, budget, rules, and activity only if the demo player is missing. `npm run db:setup` does both.
 - **Moving an old save:** On the old app's origin, export the raw `simplayz.world.v1` value from browser Local Storage to a JSON file (don't paste it into a prompt or commit it). Run `npm run db:setup`, then `npm run db:import -- /path/to/world.json` before making your first edit. Import validates the snapshot and refuses to overwrite an edited or already imported database. The app no longer reads or writes player data in Local Storage.
 
-For production, run database setup against a **persistent writable volume**, then `npm run build` and `npm start` with the same `DATABASE_PATH`. Serve the Node app over HTTPS, not as a static export. **Signup is open**: anyone who reaches your instance can register, read, and edit the save. Use network-level access controls if it should be private, and back up the SQLite database before upgrades.
+## Deployment
+
+For Vercel, follow [Deploy Simplayz with Turso](docs/deploy-vercel.md). Set `SIMPLAY_DB_TURSO_DATABASE_URL` and `SIMPLAY_DB_TURSO_AUTH_TOKEN` on the server, using separate databases and tokens for Preview and Production. The build does not connect to or migrate the database. Apply setup or migrations explicitly against the selected target before serving traffic.
+
+For self-hosted SQLite, run database setup against a **persistent writable volume**, then `npm run build` and `npm start` with the same `DATABASE_PATH`. Serve the Node app over HTTPS, not as a static export. Back up the database before upgrades. **Signup is open:** anyone who can reach your instance can register, read, and edit the shared save.
 
 ## Your next AI task
 

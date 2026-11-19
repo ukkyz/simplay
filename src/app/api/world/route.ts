@@ -1,4 +1,5 @@
 import { getAccount } from "@/auth/server";
+import { databaseErrorMessage } from "@/db/config";
 import { getWorldRepository } from "@/db/world-repository";
 import { WorldError } from "@/db/world-storage";
 import { noStoreHeaders as headers, readJsonMutation, RequestError } from "@/lib/json-request";
@@ -14,8 +15,9 @@ const unauthorized = () => fail(401, "Sign in to access the shared world.");
 function report(error: unknown) {
   if (error instanceof WorldError || error instanceof RequestError) return fail(error.status, error.message);
   // Avoid logging query arguments (e.g. prompt contents).
-  console.error("SQLite world request failed", error instanceof Error ? error.name : "Unknown error");
-  return fail(503, "The world database is unavailable. Refresh and try again.");
+  const message = databaseErrorMessage(error, "The world database is unavailable. Refresh and try again.");
+  console.error("World request failed:", message);
+  return fail(503, message);
 }
 
 export async function GET() {

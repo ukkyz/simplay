@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "git": {
+    "deploymentEnabled": {
+      "arena/f5f661f3-simplay": false
+    }
+  }
+}

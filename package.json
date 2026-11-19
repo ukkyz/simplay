@@ -7,7 +7,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db.ts migrate",
     "dev": "next dev --hostname 0.0.0.0",
-    "build": "npm run db:migrate && next build",
+    "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test:db && npm run build",
@@ -45,7 +45,7 @@
     "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0 <23"
   },
   "allowScripts": {
     "es5-ext@0.10.64": true,
