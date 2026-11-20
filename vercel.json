@@ -4,7 +4,8 @@
   "buildCommand": "npm run build",
   "git": {
     "deploymentEnabled": {
-      "arena/f5f661f3-simplay": false
+      "arena/f5f661f3-simplay": false,
+      "arena/6d8b5b9a-simplay": false
     }
   }
 }

@@ -78,6 +78,28 @@ Use only a disposable target for writes in this checklist. A browser private win
    ```
 4. When authorized to deploy, deploy to **Preview** first. Repeat guest denial, registration/sign-in/sign-out, and persistence checks there against the Preview database. Verify sign-in issues an `HttpOnly`, `Secure` session cookie under HTTPS. Review sanitized build/runtime logs for errors; never copy secrets into the log. Only after these checks pass should you cut over Production to its separately prepared target.
 
+## Troubleshoot sign-in
+
+**“Account access is temporarily unavailable”** is a request-time error. A successful build does not check the database. A warning about a newer Node.js version is not evidence of a sign-in failure; Node 22.x is supported by Vercel and is intentionally selected by `package.json`.
+
+1. Check whether the failing URL is a **Preview** or **Production** deployment. In that scope, verify that both `SIMPLAY_DB_TURSO_DATABASE_URL` and `SIMPLAY_DB_TURSO_AUTH_TOKEN` were present when the deployment was created. Check that the endpoint and the unexpired **database-scoped, read/write** token belong to the same database. If environment settings changed, use a deployment created with those settings. Do not paste the values into logs or chat.
+2. From this checkout, after `npm ci`, run the following in an authorized private shell with the **same pair** as the failing deployment. The command requires both variables, never opens a local file, and does not migrate, seed, or write to Turso.
+
+   ```sh
+   NODE_ENV=production npm run db:check
+   ```
+
+3. Use the result to narrow down the failure:
+
+   | Result | What to verify |
+   | --- | --- |
+   | `schema-incomplete` or shared world missing | Confirm this is the intended target and check its migration/import history. Only after confirming it is empty and authorized for setup, use `npm run db:setup`. An existing save should follow the backup/migration path above. |
+   | `database-access-denied` | Verify the token is valid for that exact database. Sign-in writes rate-limit counters and sessions, so a read-only token is insufficient even if `db:check` succeeds. |
+   | `database-endpoint-not-found`, `database-network-error`, `database-timeout`, or `database-unavailable` | Check the endpoint, database availability in Turso, and connectivity from the deployed function. |
+   | Reads pass, but `alex` is not provisioned | The demo profile isn't a login. Restore the existing account from a verified backup, or provision it with `npm run auth:alex` if this is an authorized new target. |
+
+4. If reads pass but sign-in still fails, check the affected deployment's **runtime logs** for the failing `POST /login`, not just the build log. Look for `Account request failed` and its phase and failure label (for example, `login/rate-limit: database-access-denied`). `local-storage-unavailable` on Vercel is a reason to verify that system variables are available and that the remote pair is configured. Share only the phase and failure label, never the token, password, session cookie, or raw query data.
+
 ## Rollback
 
 - Keep the pre-cutover database/backup and a known-good app deployment until the new one is verified. For a code-only regression, roll back to a known-good deployment compatible with the current Turso schema and environment. Rolling back app code does not undo database writes or schema changes.

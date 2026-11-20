@@ -101,3 +101,16 @@ test("database setup and Alex provisioning share fail-closed configuration", asy
   }
   await assert.rejects(access(dirname(path)), { code: "ENOENT" });
 });
+
+test("the read-only check requires a Turso pair even off Vercel and creates no fallback file", async (t) => {
+  const path = await nonexistentFile(t);
+  const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/db.ts", "check"], {
+    encoding: "utf8",
+    timeout: 15_000,
+    env: { ...process.env, VERCEL: "0", DATABASE_PATH: path, [URL_KEY]: "", [TOKEN_KEY]: "" },
+  });
+  assert.equal(result.status, 1, result.error?.message);
+  assert.match(result.stderr, new RegExp(URL_KEY));
+  assert.match(result.stderr, new RegExp(TOKEN_KEY));
+  await assert.rejects(access(dirname(path)), { code: "ENOENT" });
+});

@@ -6,6 +6,7 @@
   "scripts": {
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db.ts migrate",
+    "db:check": "tsx scripts/db.ts check",
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
